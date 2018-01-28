@@ -2,46 +2,55 @@
 var Twitter = require('twitter');
 var Spotify = require('node-spotify-api');
 var request = require("request");
+var keys = require("./keys.js");
+var fs = require("fs");
 
 var userCommand = process.argv[2];
-console.log(userCommand);
+var reqParm = process.argv[3];
+deciferCommand(userCommand, reqParm);
 
-switch(userCommand) {
-    case "my-tweets":
-        runTwitter();
-        break;
-    case "spotify-this-song":
-        runSpotify();
-        break;
-    case "movie-this":
-    	runOMDbAPI();
-    	break;
-    case "do-what-it-says":
-    	console.log("do-what-it-says");
-    	break;
-    default:
-        break;
+function deciferCommand(userCommand, reqParm){
+	switch(userCommand) {
+	    case "my-tweets":
+	        runTwitter();
+	        break;
+	    case "spotify-this-song":
+	        runSpotify(reqParm);
+	        break;
+	    case "movie-this":
+	    	runOMDbAPI(reqParm);
+	    	break;
+	    case "do-what-it-says":
+	    	runFS();
+	    	break;
+	    default:
+	        break;
+	}
+
+	//log command in log.txt file
+	if(reqParm === undefined){reqParm = "";}
+	var newLog =  "\n" + Date.now() + " " + userCommand + " " + reqParm;	
+	fs.appendFile("log.txt", newLog, (error) => { console.log(""); });	
 }
-// var client = new Twitter({
-//   consumer_key: process.env.TWITTER_CONSUMER_KEY,
-//   consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
-//   access_token_key: process.env.TWITTER_ACCESS_TOKEN_KEY,
-//   access_token_secret: process.env.TWITTER_ACCESS_TOKEN_SECRET
-// });
 
 function runTwitter(){
 	var client = new Twitter({
-	  consumer_key: 'ZjsOzqupyqAEfOjclZDPjRbkp',
-	  consumer_secret: 'CXVHDGNS9xeBTUv1cnUok6BiAFzzqCbWCqWMT8uhbpVP8Obelg',
-	  access_token_key: '955194155726090240-LZYYiJ9tcpUE6LF6efAowWOATyAgGDu',
-	  access_token_secret: 'nh2yivZHFbi5f5K5PGLStzOVt59sAJL0xMhs1VsVk3G7e',
+	  consumer_key: keys.twitterKeys.consumer_key,
+	  consumer_secret: keys.twitterKeys.consumer_secret,
+	  access_token_key: keys.twitterKeys.access_token_key,
+	  access_token_secret: keys.twitterKeys.access_token_secret
 	});
 
-	var params = {screen_name: 'crawleen06'};
+	var params = {screen_name: 'crawleen06', count: '20'};
 	client.get('statuses/user_timeline', params, function(error, tweets, response) {
 	  
 	  if (!error) {
-	    console.log(tweets);
+	  	for (var i = 0; i < tweets.length; i++)
+	  	{
+		    var result = ("\nTweet: " + tweets[i].text + " Created: "+ tweets[i].created_at);
+		    console.log(result);
+		    fs.appendFile("log.txt", result, writeFileCallback);		    
+		}
 	  }
 	  else {
 	    return console.log(error);
@@ -49,36 +58,82 @@ function runTwitter(){
 	});
 }
 
-function runSpotify(){
+function runSpotify(reqParm){
 	var spotify = new Spotify({
-		id: '04d3f9eb25764750adfd16cbd5d936c2',
-		secret: 'fda1c8ebe95c4863839ef4077b5fb75b'
+		id: keys.spotifyKeys.id,
+		secret: keys.spotifyKeys.secret
 	});
-	
-	spotify.search({ type: 'track', query: 'I saw the sign', limit:10 }, function(err, data) {
+
+	if(reqParm !== undefined){
+		var songName = reqParm;
+		var i = 0;
+	}
+	else{
+		songName = "The Sign";
+		var i = 5;
+	}
+
+	spotify.search({ type: 'track', query: songName, limit:10 }, function(err, data) {
 		if (err) {
-		return console.log('Error occurred: ' + err);
+			return console.log('Error occurred: ' + err);
 		}
 
-		var songInfo = data.tracks.items[0];
-    	var songResult = console.log(songInfo.artists[0].name)
-                     console.log(songInfo.name)
-                     console.log(songInfo.album.name)
-                     console.log(songInfo.preview_url)
-    	console.log(songResult);
+		var songInfo = data.tracks.items[i];
+		var result = "\n`````````````````````````````````````````````````````````````````" + 
+			"\nArtist: " + songInfo.artists[0].name + 
+			"\nTitle: " +songInfo.name + 
+			"\nPreview URL: " +songInfo.preview_url + 
+	     	"\nAlbum: " +songInfo.album.name + 
+	     	"\n`````````````````````````````````````````````````````````````````";
+     	console.log(result);
+        fs.appendFile("log.txt", result, writeFileCallback);
+    });
+}
+
+function runOMDbAPI(reqParm){
+	var reqParm = reqParm;
+	if(reqParm !== undefined){
+		var movieName = reqParm;
+	}
+	else{
+		movieName = "Mr Nobody";
+	}
+
+	request("http://www.omdbapi.com/?t="+movieName+"&y=&plot=short&apikey=trilogy", function(error, response, body) {
+		if (!error && response.statusCode === 200) {
+			var result = "\n`````````````````````````````````````````````````````````````````" + 
+				"\nMovie Title: " + JSON.parse(body).Title + 
+				"\nRelease Year: " + JSON.parse(body).Year + 
+				"\nIMDB Rating: " + JSON.parse(body).imdbRating + 
+				"\nRotten Tomatoes Rating: " + JSON.parse(body).Ratings[1].Value +
+				"\nCountry Made: " + JSON.parse(body).Country +
+				"\nLanguage: " + JSON.parse(body).Language + 
+				"\nPlot: " + JSON.parse(body).Plot + 
+				"\nActors: " + JSON.parse(body).Actors +
+				"\n````````````````````````````````````````````````````````````````";
+			console.log(result);
+        	fs.appendFile("log.txt", result, writeFileCallback);
+		}
 	});
 }
 
-function runOMDbAPI(){
-	// Then run a request to the OMDB API with the movie specified
-	request("http://www.omdbapi.com/?t=mr+nobody&y=&plot=short&apikey=trilogy", function(error, response, body) {
+function runFS(){
+	fs.readFile("random.txt", "utf8", function(error, data) {
+		if (error) {
+		return console.log(error);
+		}
 
-	  // If the request is successful (i.e. if the response status code is 200)
-	  if (!error && response.statusCode === 200) {
-
-	    // Parse the body of the site and recover just the imdbRating
-	    // (Note: The syntax below for parsing isn't obvious. Just spend a few moments dissecting it).
-	    console.log("The movie's rating is: " + JSON.parse(body).imdbRating);
-	  }
+		var dataArr = data.split(",");
+		deciferCommand(dataArr[0],dataArr[1]);
+		userCommand = "";
 	});
 }
+
+var writeFileCallback = function(err) {
+  if (err) {
+    console.log(err);
+  }
+
+  //console.log("File saved!");
+};
+  
